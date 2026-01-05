@@ -207,20 +207,20 @@ public:
   // Helper that builds a trace and stringifies it.
 
 protected:
-  virtual Maybe<Own<Event>> fire() = 0;
-  // Fire the event.  Possibly returns a pointer to itself, which will be discarded by the
-  // caller.  This is the only way that an event can delete itself as a result of firing, as
-  // doing so from within fire() will throw an exception.
+  virtual void fire() = 0;
+  // Fire the event. Possibly deletes itself.
+
+  void detachFromLoop();
+  // Detach this event from its loop. After calling this, the event will not access the loop
+  // anymore. This is used by XThreadEvent when the target event loop has been destroyed before
+  // the XThreadEvent itself is destroyed.
 
 private:
   friend class kj::EventLoop;
-  EventLoop& loop;
+  Maybe<EventLoop&> loop;
   Event* next;
   Event** prev;
-  bool firing = false;
 
-  static constexpr uint MAGIC_LIVE_VALUE = 0x1e366381u;
-  uint live = MAGIC_LIVE_VALUE;
   SourceLocation location;
 };
 
@@ -913,7 +913,7 @@ private:
   ForkBranchBase** tailBranch = &headBranch;
   // Tail becomes null once the inner promise is ready and all branches have been notified.
 
-  Maybe<Own<Event>> fire() override;
+  void fire() override;
   void traceEvent(TraceBuilder& builder) override;
 
   friend class ForkBranchBase;
@@ -993,7 +993,7 @@ private:
   Event* onReadyEvent = nullptr;
   OwnPromiseNode* selfPtr = nullptr;
 
-  Maybe<Own<Event>> fire() override;
+  void fire() override;
   void traceEvent(TraceBuilder& builder) override;
 };
 
@@ -1039,7 +1039,7 @@ private:
     bool get(ExceptionOrValue& output);
     // Returns true if this is the side that finished.
 
-    Maybe<Own<Event>> fire() override;
+    void fire() override;
     void traceEvent(TraceBuilder& builder) override;
 
   private:
@@ -1090,7 +1090,7 @@ private:
            ExceptionOrValue& output, SourceLocation location);
     ~Branch() noexcept(false);
 
-    Maybe<Own<Event>> fire() override;
+    void fire() override;
     void traceEvent(TraceBuilder& builder) override;
 
   private:
@@ -1175,7 +1175,7 @@ private:
            SourceLocation location);
     ~Branch() noexcept(false);
 
-    Maybe<Own<Event>> fire() override;
+    void fire() override;
     void traceEvent(TraceBuilder &builder) override;
 
   private:
@@ -1242,7 +1242,7 @@ private:
 
   ExceptionOrValue& resultRef;
 
-  Maybe<Own<Event>> fire() override;
+  void fire() override;
   void traceEvent(TraceBuilder& builder) override;
 };
 
@@ -1359,7 +1359,7 @@ private:
   void run();
   virtual void runImpl(WaitScope& waitScope) = 0;
 
-  Maybe<Own<Event>> fire() override;
+  void fire() override;
   void traceEvent(TraceBuilder& builder) override;
   // Implements Event. Each time the event is fired, switchToFiber() is called.
 
@@ -1927,7 +1927,7 @@ private:
   class DelayedDoneHack;
 
   // implements Event ----------------------------------------------------------
-  Maybe<Own<Event>> fire() override;
+  void fire() override;
   // If called with promiseNode == nullptr, it's time to call execute(). If promiseNode != nullptr,
   // then it just indicated readiness and we need to get its result.
 
@@ -2414,7 +2414,7 @@ private:
   // -------------------------------------------------------
   // Event implementation
 
-  Maybe<Own<Event>> fire() override;
+  void fire() override;
   void traceEvent(TraceBuilder& builder) override;
 
   stdcoro::coroutine_handle<> coroutine;
