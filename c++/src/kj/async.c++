@@ -902,7 +902,7 @@ namespace _ {  // (private)
 XThreadEvent::XThreadEvent(
     ExceptionOrValue& result, const Executor& targetExecutor, EventLoop& loop,
     void* funcTracePtr, SourceLocation location)
-    : Event(loop, location), result(result), funcTracePtr(funcTracePtr),
+    : Event(location), result(result), funcTracePtr(funcTracePtr),
       targetExecutor(targetExecutor.addRef()) {}
 
 void XThreadEvent::tracePromise(TraceBuilder& builder, bool stopAtNextEvent) {
@@ -1759,11 +1759,29 @@ void EventPort::wake() const {
 }
 
 EventLoop::EventLoop()
-    : daemons(kj::heap<TaskSet>(_::LoggingErrorHandler::instance)) {}
+    : daemons(kj::heap<TaskSet>(_::LoggingErrorHandler::instance)) {
+  head.next = &depthFirstInsertPoint;
+  depthFirstInsertPoint.prev = &head.next;
+  depthFirstInsertPoint.next = &breadthFirstInsertPoint;
+  breadthFirstInsertPoint.prev = &depthFirstInsertPoint.next;
+  breadthFirstInsertPoint.next = &tail;
+  tail.prev = &breadthFirstInsertPoint.next;
+  wouldSleepHead.next = &wouldSleepTail;
+  wouldSleepTail.prev = &wouldSleepHead.next;
+}
 
 EventLoop::EventLoop(EventPort& port)
     : port(port),
-      daemons(kj::heap<TaskSet>(_::LoggingErrorHandler::instance)) {}
+      daemons(kj::heap<TaskSet>(_::LoggingErrorHandler::instance)) {
+  head.next = &depthFirstInsertPoint;
+  depthFirstInsertPoint.prev = &head.next;
+  depthFirstInsertPoint.next = &breadthFirstInsertPoint;
+  breadthFirstInsertPoint.prev = &depthFirstInsertPoint.next;
+  breadthFirstInsertPoint.next = &tail;
+  tail.prev = &breadthFirstInsertPoint.next;
+  wouldSleepHead.next = &wouldSleepTail;
+  wouldSleepTail.prev = &wouldSleepHead.next;
+}
 
 EventLoop::~EventLoop() noexcept(false) {
   // Destroy all "daemon" tasks, noting that their destructors might register more daemon tasks.
@@ -1780,11 +1798,24 @@ EventLoop::~EventLoop() noexcept(false) {
 
   // The application _should_ destroy everything using the EventLoop before destroying the
   // EventLoop itself, so if there are events on the loop, this indicates a memory leak.
-  KJ_REQUIRE(head == nullptr, "EventLoop destroyed with events still in the queue.  Memory leak?",
-             head->traceEvent()) {
+  _::Event* firstEvent = head.next;
+  if (firstEvent == &depthFirstInsertPoint) {
+    firstEvent = firstEvent->next;
+  }
+  if (firstEvent == &breadthFirstInsertPoint) {
+    firstEvent = firstEvent->next;
+  }
+
+  KJ_REQUIRE(firstEvent == &tail,
+             "EventLoop destroyed with events still in the queue.  Memory leak?",
+             firstEvent->traceEvent()) {
     // Unlink all the events and hope that no one ever fires them...
-    _::Event* event = head;
-    while (event != nullptr) {
+    _::Event* event = head.next;
+    while (event != &tail) {
+      if (event == &depthFirstInsertPoint || event == &breadthFirstInsertPoint) {
+        event = event->next;
+        continue;
+      }
       _::Event* next = event->next;
       event->next = nullptr;
       event->prev = nullptr;
@@ -1814,24 +1845,33 @@ void EventLoop::run(uint maxTurnCount) {
 }
 
 bool EventLoop::turn() {
-  _::Event* event = head;
+  _::Event* event = head.next;
 
-  if (event == nullptr) {
+  if (event == &depthFirstInsertPoint) {
+    event = event->next;
+  }
+  if (event == &breadthFirstInsertPoint) {
+    event = event->next;
+  }
+
+  if (event == &tail) {
     // No events in the queue.
     return false;
   } else {
-    head = event->next;
-    if (head != nullptr) {
-      head->prev = &head;
-    }
+    *event->prev = event->next;
+    event->next->prev = event->prev;  // Always valid - sentinel is always present
 
-    depthFirstInsertPoint = &head;
-    if (breadthFirstInsertPoint == &event->next) {
-      breadthFirstInsertPoint = &head;
-    }
-    if (tail == &event->next) {
-      tail = &head;
-    }
+    auto resetDepthFirstInsertPoint = [&]() {
+      if (head.next == &depthFirstInsertPoint) return;
+      *depthFirstInsertPoint.prev = depthFirstInsertPoint.next;
+      depthFirstInsertPoint.next->prev = depthFirstInsertPoint.prev;
+      depthFirstInsertPoint.next = head.next;
+      depthFirstInsertPoint.prev = &head.next;
+      head.next = &depthFirstInsertPoint;
+      depthFirstInsertPoint.next->prev = &depthFirstInsertPoint.next;
+    };
+
+    resetDepthFirstInsertPoint();
 
     event->next = nullptr;
     event->prev = nullptr;
@@ -1845,13 +1885,20 @@ bool EventLoop::turn() {
       eventToDestroy = event->fire();
     }
 
-    depthFirstInsertPoint = &head;
+    resetDepthFirstInsertPoint();
     return true;
   }
 }
 
 bool EventLoop::isRunnable() {
-  return head != nullptr;
+  _::Event* event = head.next;
+  if (event == &depthFirstInsertPoint) {
+    event = event->next;
+  }
+  if (event == &breadthFirstInsertPoint) {
+    event = event->next;
+  }
+  return event != &tail;
 }
 
 const Executor& EventLoop::getExecutor() {
@@ -1885,7 +1932,7 @@ void EventLoop::leaveScope() {
 }
 
 void EventLoop::wait() {
-  if (wouldSleepHead != nullptr) {
+  if (wouldSleepHead.next != &wouldSleepTail) {
     // Oh, someone wants to know when we are going to sleep. Use poll() instead so that we don't
     // actually sleep. poll() will queue the would-sleep waiter if needed.
     poll();
@@ -1918,9 +1965,9 @@ void EventLoop::poll() {
     e->poll();
   }
 
-  if (head == nullptr && wouldSleepHead != nullptr) {
+  if (!isRunnable() && wouldSleepHead.next != &wouldSleepTail) {
     // We got nothing by polling. So, enqueue the next would-sleep event instead.
-    _::Event* event = wouldSleepHead;
+    _::Event* event = wouldSleepHead.next;
     event->disarm();
     event->armDepthFirst();
   }
@@ -2162,10 +2209,13 @@ void detach(kj::Promise<void>&& promise) {
 }
 
 Event::Event(SourceLocation location)
-    : loop(currentEventLoop()), next(nullptr), prev(nullptr), location(location) {}
+    : next(nullptr), prev(nullptr), location(location) {}
 
-Event::Event(kj::EventLoop& loop, SourceLocation location)
-    : loop(loop), next(nullptr), prev(nullptr), location(location) {}
+kj::EventLoop& Event::assertEventLoop() {
+  auto* current = threadLocalEventLoop;
+  KJ_REQUIRE(current != nullptr, "No event loop is running on this thread.");
+  return *current;
+}
 
 Event::~Event() noexcept {  // intentionally noexcept
   live = 0;
@@ -2186,9 +2236,7 @@ Event::~Event() noexcept {  // intentionally noexcept
 }
 
 void Event::armDepthFirst() {
-  KJ_REQUIRE(threadLocalEventLoop == &loop || threadLocalEventLoop == nullptr,
-             "Event armed from different thread than it was created in.  You must use "
-             "Executor to queue events cross-thread.", threadLocalEventLoop, &loop);
+  auto& loop = assertEventLoop();
   if (live != MAGIC_LIVE_VALUE) {
     ([this]() noexcept {
       KJ_FAIL_ASSERT("tried to arm Event after it was destroyed", location);
@@ -2196,30 +2244,18 @@ void Event::armDepthFirst() {
   }
 
   if (prev == nullptr) {
-    next = *loop.depthFirstInsertPoint;
-    prev = loop.depthFirstInsertPoint;
+    auto* insertPoint = loop.depthFirstInsertPoint.prev;
+    next = *insertPoint;
+    prev = insertPoint;
     *prev = this;
-    if (next != nullptr) {
-      next->prev = &next;
-    }
-
-    loop.depthFirstInsertPoint = &next;
-
-    if (loop.breadthFirstInsertPoint == prev) {
-      loop.breadthFirstInsertPoint = &next;
-    }
-    if (loop.tail == prev) {
-      loop.tail = &next;
-    }
+    next->prev = &next;  // Always valid - sentinel is always present
 
     loop.setRunnable(true);
   }
 }
 
 void Event::armBreadthFirst() {
-  KJ_REQUIRE(threadLocalEventLoop == &loop || threadLocalEventLoop == nullptr,
-             "Event armed from different thread than it was created in.  You must use "
-             "Executor to queue events cross-thread.", threadLocalEventLoop, &loop);
+  auto& loop = assertEventLoop();
   if (live != MAGIC_LIVE_VALUE) {
     ([this]() noexcept {
       KJ_FAIL_ASSERT("tried to arm Event after it was destroyed", location);
@@ -2227,27 +2263,18 @@ void Event::armBreadthFirst() {
   }
 
   if (prev == nullptr) {
-    next = *loop.breadthFirstInsertPoint;
-    prev = loop.breadthFirstInsertPoint;
+    auto* insertPoint = loop.breadthFirstInsertPoint.prev;
+    next = *insertPoint;
+    prev = insertPoint;
     *prev = this;
-    if (next != nullptr) {
-      next->prev = &next;
-    }
-
-    loop.breadthFirstInsertPoint = &next;
-
-    if (loop.tail == prev) {
-      loop.tail = &next;
-    }
+    next->prev = &next;  // Always valid - sentinel is always present
 
     loop.setRunnable(true);
   }
 }
 
 void Event::armLast() {
-  KJ_REQUIRE(threadLocalEventLoop == &loop || threadLocalEventLoop == nullptr,
-             "Event armed from different thread than it was created in.  You must use "
-             "Executor to queue events cross-thread.", threadLocalEventLoop, &loop);
+  auto& loop = assertEventLoop();
   if (live != MAGIC_LIVE_VALUE) {
     ([this]() noexcept {
       KJ_FAIL_ASSERT("tried to arm Event after it was destroyed", location);
@@ -2255,28 +2282,21 @@ void Event::armLast() {
   }
 
   if (prev == nullptr) {
-    next = *loop.breadthFirstInsertPoint;
-    prev = loop.breadthFirstInsertPoint;
+    auto* insertPoint = &loop.breadthFirstInsertPoint.next;
+    next = *insertPoint;
+    prev = insertPoint;
     *prev = this;
-    if (next != nullptr) {
-      next->prev = &next;
-    }
+    next->prev = &next;  // Always valid - sentinel is always present
 
-    // We don't update loop.breadthFirstInsertPoint because we want further inserts to go *before*
+    // We don't move breadthFirstInsertPoint because we want further inserts to go *before*
     // this event.
-
-    if (loop.tail == prev) {
-      loop.tail = &next;
-    }
 
     loop.setRunnable(true);
   }
 }
 
 void Event::armWhenWouldSleep() {
-  KJ_REQUIRE(threadLocalEventLoop == &loop || threadLocalEventLoop == nullptr,
-             "Event armed from different thread than it was created in.  You must use "
-             "Executor to queue events cross-thread.", threadLocalEventLoop, &loop);
+  auto& loop = assertEventLoop();
   if (live != MAGIC_LIVE_VALUE) {
     ([this]() noexcept {
       KJ_FAIL_ASSERT("tried to arm Event after it was destroyed", location);
@@ -2284,47 +2304,30 @@ void Event::armWhenWouldSleep() {
   }
 
   if (prev == nullptr) {
-    next = loop.wouldSleepHead;
-    prev = &loop.wouldSleepHead;
+    next = loop.wouldSleepHead.next;
+    prev = &loop.wouldSleepHead.next;
     *prev = this;
-    if (next != nullptr) {
-      next->prev = &next;
-    }
-
-    if (loop.wouldSleepTail == prev) {
-      loop.wouldSleepTail = &next;
-    }
+    next->prev = &next;  // Always valid - sentinel is always at end
 
     loop.setRunnable(true);
   }
 }
 
 bool Event::isNext() {
-  return loop.running && loop.head == this;
+  auto& loop = assertEventLoop();
+  if (!loop.running) return false;
+  _::Event* event = loop.head.next;
+  if (event == &loop.depthFirstInsertPoint) {
+    event = event->next;
+  }
+  if (event == &loop.breadthFirstInsertPoint) {
+    event = event->next;
+  }
+  return event == this;
 }
 
 void Event::disarm() noexcept {
   if (prev != nullptr) {
-    if (threadLocalEventLoop != &loop && threadLocalEventLoop != nullptr) {
-      // This will crash because the method is `noexcept`. That's good because otherwise we're
-      // likely going to segfault later.
-      KJ_FAIL_ASSERT("Promise destroyed from a different thread than it was created in.",
-          threadLocalEventLoop, &loop);
-    }
-
-    if (loop.tail == &next) {
-      loop.tail = prev;
-    }
-    if (loop.depthFirstInsertPoint == &next) {
-      loop.depthFirstInsertPoint = prev;
-    }
-    if (loop.breadthFirstInsertPoint == &next) {
-      loop.breadthFirstInsertPoint = prev;
-    }
-    if (loop.wouldSleepTail == &next) {
-      loop.wouldSleepTail = prev;
-    }
-
     *prev = next;
     if (next != nullptr) {
       next->prev = prev;
@@ -3141,7 +3144,10 @@ void WeakFulfillerBase::disposeImpl(void* pointer) const {
     // Already detached.
     delete this;
   } else {
-    if (inner->isWaiting()) {
+    if (inner->isWaiting() && threadLocalEventLoop != nullptr) {
+      // Do not reject if there is no event loop running anymore - there is no way to handle it
+      // anyway.
+
       // Let's find out if there's an exception being thrown. If so, we'll use it to reject the
       // promise.
       inner->reject(getDestructionReason(
@@ -3180,7 +3186,7 @@ void CoroutineBase::unhandledExceptionImpl(ExceptionOrValue& resultRef) {
   // unhandled exceptions end up here, not just ones after the first co_await.
 
   auto exception = getCaughtExceptionAsKj();
-  
+
   KJ_IF_SOME(disposalResults, maybeDisposalResults) {
     // Exception during coroutine destruction.
     if (!isDone()) {
@@ -3197,7 +3203,7 @@ void CoroutineBase::unhandledExceptionImpl(ExceptionOrValue& resultRef) {
     if (!onReadyEvent.armed()) {
       // Exception during coroutine execution.
       onReadyEvent.arm();
-    } 
+    }
     // Otherwise this is an exception during during coroutine frame-unwind
     // in-between co_return and final_suspend().
   }
@@ -3275,7 +3281,7 @@ void CoroutineBase::destroy() {
 
   KJ_IF_SOME(exception, disposalResults.exception) {
     if (UnwindDetector::uncaughtExceptionCount() == 0) {
-      // Technically this does not equal the `UnwindDetector` logic, 
+      // Technically this does not equal the `UnwindDetector` logic,
       // but this behaviour will never lead to trouble, is almost always true on practice
       // (only coroutines _created_ during unwind could notice a difference in behaviour),
       // and, more importantly, much faster.
