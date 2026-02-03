@@ -6,10 +6,7 @@ on:
   push:
     branches:
       - v2
-
-concurrency:
-  group: codspeed.yml-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
+  workflow_dispatch:
 
 permissions:
   contents: read # required for actions/checkout
