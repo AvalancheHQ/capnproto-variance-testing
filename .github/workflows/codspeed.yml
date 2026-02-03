@@ -106,6 +106,12 @@ jobs:
           run: ./c++/run_benchmarks.sh
           mode: simulation
 
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-linear
+          path: c++/bazel-bin/src/kj/
+
 
   benchmarks-parallel:
     name: Run benchmarks in parallel
@@ -148,3 +154,9 @@ jobs:
         with:
           run: ./c++/run_benchmarks.sh
           mode: simulation
+
+      - name: Upload benchmark artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmarks-parallel-${{ matrix.iteration }}
+          path: c++/bazel-bin/src/kj/
