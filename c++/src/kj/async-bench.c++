@@ -44,7 +44,7 @@ static void bm_Promise_ReadyNow(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Promise_ReadyNow)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Promise_ReadyNow)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 ///////////////////////////////
 // Benchmarks for immediate promises and coroutines.
@@ -64,7 +64,7 @@ static void bm_Promise_Immediate(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Promise_Immediate)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Promise_Immediate)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 kj::Promise<size_t> immediateCoroutine() { co_return 42; }
 
@@ -81,7 +81,7 @@ static void bm_Coro_Immediate(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Coro_Immediate)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Coro_Immediate)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 ///////////////////////////////
 // Benchmarks for awaiting single immediate promises and coroutines.
@@ -99,7 +99,7 @@ static void bm_Promise_ImmediatePromise_Then(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Promise_ImmediatePromise_Then)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Promise_ImmediatePromise_Then)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 static void bm_Coro_CoAwait_ImmediatePromise(benchmark::State &state) {
   // Benchmark coro that co_awaits an immediate coroutine
@@ -114,7 +114,7 @@ static void bm_Coro_CoAwait_ImmediatePromise(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Coro_CoAwait_ImmediatePromise)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Coro_CoAwait_ImmediatePromise)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 static void bm_Coro_CoAwait_ImmediateCoroutine(benchmark::State &state) {
   // Benchmark coro that co_awaits an immediate coroutine
@@ -131,7 +131,7 @@ static void bm_Coro_CoAwait_ImmediateCoroutine(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Coro_CoAwait_ImmediateCoroutine)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Coro_CoAwait_ImmediateCoroutine)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 ///////////////////////////////
 // Pow benchmarks mean to benchmark promise evaluation when the start of the
@@ -157,7 +157,7 @@ static void bm_Promise_Pow2_20(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Promise_Pow2_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Promise_Pow2_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 kj::Promise<size_t> coroPow2(size_t i) {
   if (i == 0)
@@ -178,7 +178,7 @@ static void bm_Coro_Pow2_20(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Coro_Pow2_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Coro_Pow2_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 ///////////////////////////////
 // shift benchmarks mean to benchmark deep promise chains ending on paf.
@@ -205,7 +205,7 @@ static void bm_Promise_Shift_20(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Promise_Shift_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Promise_Shift_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 // shifts x left by n bits.
 kj::Promise<size_t> coroShift(size_t n, kj::Promise<size_t> x) {
@@ -229,7 +229,7 @@ static void bm_Coro_Shift_20(benchmark::State &state) {
   }
 }
 
-BENCHMARK(bm_Coro_Shift_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
+BENCHMARK(bm_Coro_Shift_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
 ///////////////////////////////
 // fib benchmarks mean to benchmark many await points within a single coro
