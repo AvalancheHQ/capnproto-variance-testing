@@ -28,18 +28,23 @@
 
 // kj::READY_NOW is in its own performance class
 
+
+// https://codspeed.io/AvalancheHQ/capnproto-variance-testing/runs/compare/6981d46a6ba6a1b99e6888c1..6981d5cb4b57099e55a7908d?q=bm_Promise_ReadyNow
+// 5.5us -> 5.7us
 static void bm_Promise_ReadyNow(benchmark::State &state) {
   // Benchmark waiting for a kj::READY_NOW promise.
   kj::EventLoop loop;
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto promise = []() -> kj::Promise<void> { return kj::READY_NOW; }();
-    promise.wait(waitScope);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto promise = []() -> kj::Promise<void> { return kj::READY_NOW; }();
+      promise.wait(waitScope);
+    }
   }
 }
 
-BENCHMARK(bm_Promise_ReadyNow);
+BENCHMARK(bm_Promise_ReadyNow)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 ///////////////////////////////
 // Benchmarks for immediate promises and coroutines.
@@ -52,12 +57,14 @@ static void bm_Promise_Immediate(benchmark::State &state) {
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto promise = immediatePromise();
-    promise.wait(waitScope);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto promise = immediatePromise();
+      promise.wait(waitScope);
+    }
   }
 }
 
-BENCHMARK(bm_Promise_Immediate);
+BENCHMARK(bm_Promise_Immediate)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 kj::Promise<size_t> immediateCoroutine() { co_return 42; }
 
@@ -67,12 +74,14 @@ static void bm_Coro_Immediate(benchmark::State &state) {
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto promise = immediateCoroutine();
-    promise.wait(waitScope);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto promise = immediateCoroutine();
+      promise.wait(waitScope);
+    }
   }
 }
 
-BENCHMARK(bm_Coro_Immediate);
+BENCHMARK(bm_Coro_Immediate)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 ///////////////////////////////
 // Benchmarks for awaiting single immediate promises and coroutines.
@@ -83,12 +92,14 @@ static void bm_Promise_ImmediatePromise_Then(benchmark::State &state) {
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto promise = immediatePromise().then([](size_t x) { return; });
-    promise.wait(waitScope);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto promise = immediatePromise().then([](size_t x) { return; });
+      promise.wait(waitScope);
+    }
   }
 }
 
-BENCHMARK(bm_Promise_ImmediatePromise_Then);
+BENCHMARK(bm_Promise_ImmediatePromise_Then)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 static void bm_Coro_CoAwait_ImmediatePromise(benchmark::State &state) {
   // Benchmark coro that co_awaits an immediate coroutine
@@ -96,12 +107,14 @@ static void bm_Coro_CoAwait_ImmediatePromise(benchmark::State &state) {
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto promise = []() -> kj::Promise<void> { co_await immediatePromise(); }();
-    promise.wait(waitScope);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto promise = []() -> kj::Promise<void> { co_await immediatePromise(); }();
+      promise.wait(waitScope);
+    }
   }
 }
 
-BENCHMARK(bm_Coro_CoAwait_ImmediatePromise);
+BENCHMARK(bm_Coro_CoAwait_ImmediatePromise)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 static void bm_Coro_CoAwait_ImmediateCoroutine(benchmark::State &state) {
   // Benchmark coro that co_awaits an immediate coroutine
@@ -109,14 +122,16 @@ static void bm_Coro_CoAwait_ImmediateCoroutine(benchmark::State &state) {
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto promise = []() -> kj::Promise<void> {
-      co_await immediateCoroutine();
-    }();
-    promise.wait(waitScope);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto promise = []() -> kj::Promise<void> {
+        co_await immediateCoroutine();
+      }();
+      promise.wait(waitScope);
+    }
   }
 }
 
-BENCHMARK(bm_Coro_CoAwait_ImmediateCoroutine);
+BENCHMARK(bm_Coro_CoAwait_ImmediateCoroutine)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 ///////////////////////////////
 // Pow benchmarks mean to benchmark promise evaluation when the start of the
@@ -135,12 +150,14 @@ static void bm_Promise_Pow2_20(benchmark::State &state) {
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto promise = pow2(20);
-    KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto promise = pow2(20);
+      KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
+    }
   }
 }
 
-BENCHMARK(bm_Promise_Pow2_20);
+BENCHMARK(bm_Promise_Pow2_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 kj::Promise<size_t> coroPow2(size_t i) {
   if (i == 0)
@@ -154,12 +171,14 @@ static void bm_Coro_Pow2_20(benchmark::State &state) {
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto promise = coroPow2(20);
-    KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto promise = coroPow2(20);
+      KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
+    }
   }
 }
 
-BENCHMARK(bm_Coro_Pow2_20);
+BENCHMARK(bm_Coro_Pow2_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 ///////////////////////////////
 // shift benchmarks mean to benchmark deep promise chains ending on paf.
@@ -177,14 +196,16 @@ static void bm_Promise_Shift_20(benchmark::State &state) {
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto paf = kj::newPromiseAndFulfiller<size_t>();
-    auto promise = shift(20, kj::mv(paf.promise));
-    paf.fulfiller->fulfill(3);
-    KJ_REQUIRE(promise.wait(waitScope) == (1ll << 20) * 3);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto paf = kj::newPromiseAndFulfiller<size_t>();
+      auto promise = shift(20, kj::mv(paf.promise));
+      paf.fulfiller->fulfill(3);
+      KJ_REQUIRE(promise.wait(waitScope) == (1ll << 20) * 3);
+    }
   }
 }
 
-BENCHMARK(bm_Promise_Shift_20);
+BENCHMARK(bm_Promise_Shift_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 // shifts x left by n bits.
 kj::Promise<size_t> coroShift(size_t n, kj::Promise<size_t> x) {
@@ -199,14 +220,16 @@ static void bm_Coro_Shift_20(benchmark::State &state) {
   kj::WaitScope waitScope(loop);
 
   for (auto _ : state) {
-    auto paf = kj::newPromiseAndFulfiller<size_t>();
-    auto promise = coroShift(20, kj::mv(paf.promise));
-    paf.fulfiller->fulfill(3);
-    KJ_REQUIRE(promise.wait(waitScope) == (1ll << 20) * 3);
+    for (int64_t i = 0; i < state.range(0); i++) {
+      auto paf = kj::newPromiseAndFulfiller<size_t>();
+      auto promise = coroShift(20, kj::mv(paf.promise));
+      paf.fulfiller->fulfill(3);
+      KJ_REQUIRE(promise.wait(waitScope) == (1ll << 20) * 3);
+    }
   }
 }
 
-BENCHMARK(bm_Coro_Shift_20);
+BENCHMARK(bm_Coro_Shift_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100);
 
 ///////////////////////////////
 // fib benchmarks mean to benchmark many await points within a single coro
