@@ -31,212 +31,212 @@
 // kj::READY_NOW is in its own performance class
 
 
-// // https://codspeed.io/AvalancheHQ/capnproto-variance-testing/runs/compare/6981d46a6ba6a1b99e6888c1..6981d5cb4b57099e55a7908d?q=bm_Promise_ReadyNow
-// // 5.5us -> 5.7us
-// static void bm_Promise_ReadyNow(benchmark::State &state) {
-//   // Benchmark waiting for a kj::READY_NOW promise.
-//   kj::EventLoop loop;
-//   kj::WaitScope waitScope(loop);
+// https://codspeed.io/AvalancheHQ/capnproto-variance-testing/runs/compare/6981d46a6ba6a1b99e6888c1..6981d5cb4b57099e55a7908d?q=bm_Promise_ReadyNow
+// 5.5us -> 5.7us
+static void bm_Promise_ReadyNow(benchmark::State &state) {
+  // Benchmark waiting for a kj::READY_NOW promise.
+  kj::EventLoop loop;
+  kj::WaitScope waitScope(loop);
 
-//   auto warmup_iters = state.range(0); 
+  auto warmup_iters = state.range(0); 
 
-//   for (auto _ : state) {
-//     for (int64_t i = 0; i < warmup_iters; i++) {
-//       auto promise = []() -> kj::Promise<void> { return kj::READY_NOW; }();
-//       promise.wait(waitScope);
-//     }
+  for (auto _ : state) {
+    for (int64_t i = 0; i < warmup_iters; i++) {
+      auto promise = []() -> kj::Promise<void> { return kj::READY_NOW; }();
+      promise.wait(waitScope);
+    }
 
-//     CALLGRIND_ZERO_STATS;
+    CALLGRIND_ZERO_STATS;
 
-//     auto promise = []() -> kj::Promise<void> { return kj::READY_NOW; }();
-//     promise.wait(waitScope);
-//   }
-// }
+    auto promise = []() -> kj::Promise<void> { return kj::READY_NOW; }();
+    promise.wait(waitScope);
+  }
+}
 
 // BENCHMARK(bm_Promise_ReadyNow)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
-// ///////////////////////////////
-// // Benchmarks for immediate promises and coroutines.
+///////////////////////////////
+// Benchmarks for immediate promises and coroutines.
 
-// kj::Promise<size_t> immediatePromise() { return 42; }
+kj::Promise<size_t> immediatePromise() { return 42; }
 
-// static void bm_Promise_Immediate(benchmark::State &state) {
-//   // Benchmark waiting for an immediate promise.
-//   kj::EventLoop loop;
-//   kj::WaitScope waitScope(loop);
+static void bm_Promise_Immediate(benchmark::State &state) {
+  // Benchmark waiting for an immediate promise.
+  kj::EventLoop loop;
+  kj::WaitScope waitScope(loop);
 
-//   auto warmup_iters = state.range(0);
+  auto warmup_iters = state.range(0);
 
-//   for (auto _ : state) {
-//     for (int64_t i = 0; i < warmup_iters; i++) {
-//       auto promise = immediatePromise();
-//       promise.wait(waitScope);
-//     }
+  for (auto _ : state) {
+    for (int64_t i = 0; i < warmup_iters; i++) {
+      auto promise = immediatePromise();
+      promise.wait(waitScope);
+    }
 
-//     CALLGRIND_ZERO_STATS;
+    CALLGRIND_ZERO_STATS;
 
-//     auto promise = immediatePromise();
-//     promise.wait(waitScope);
-//   }
-// }
+    auto promise = immediatePromise();
+    promise.wait(waitScope);
+  }
+}
 
 // BENCHMARK(bm_Promise_Immediate)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
-// kj::Promise<size_t> immediateCoroutine() { co_return 42; }
+kj::Promise<size_t> immediateCoroutine() { co_return 42; }
 
-// static void bm_Coro_Immediate(benchmark::State &state) {
-//   // Benchmark waiting for an immediate coroutine.
-//   kj::EventLoop loop;
-//   kj::WaitScope waitScope(loop);
+static void bm_Coro_Immediate(benchmark::State &state) {
+  // Benchmark waiting for an immediate coroutine.
+  kj::EventLoop loop;
+  kj::WaitScope waitScope(loop);
 
-//   auto warmup_iters = state.range(0);
+  auto warmup_iters = state.range(0);
 
-//   for (auto _ : state) {
-//     for (int64_t i = 0; i < warmup_iters; i++) {
-//       auto promise = immediateCoroutine();
-//       promise.wait(waitScope);
-//     }
+  for (auto _ : state) {
+    for (int64_t i = 0; i < warmup_iters; i++) {
+      auto promise = immediateCoroutine();
+      promise.wait(waitScope);
+    }
 
-//     CALLGRIND_ZERO_STATS;
+    CALLGRIND_ZERO_STATS;
 
-//     auto promise = immediateCoroutine();
-//     promise.wait(waitScope);
-//   }
-// }
+    auto promise = immediateCoroutine();
+    promise.wait(waitScope);
+  }
+}
 
 // BENCHMARK(bm_Coro_Immediate)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
-// ///////////////////////////////
-// // Benchmarks for awaiting single immediate promises and coroutines.
+///////////////////////////////
+// Benchmarks for awaiting single immediate promises and coroutines.
 
-// static void bm_Promise_ImmediatePromise_Then(benchmark::State &state) {
-//   // Benchmark coro that co_awaits an immediate coroutine
-//   kj::EventLoop loop;
-//   kj::WaitScope waitScope(loop);
+static void bm_Promise_ImmediatePromise_Then(benchmark::State &state) {
+  // Benchmark coro that co_awaits an immediate coroutine
+  kj::EventLoop loop;
+  kj::WaitScope waitScope(loop);
 
-//   auto warmup_iters = state.range(0);
+  auto warmup_iters = state.range(0);
 
-//   for (auto _ : state) {
-//     for (int64_t i = 0; i < warmup_iters; i++) {
-//       auto promise = immediatePromise().then([](size_t x) { return; });
-//       promise.wait(waitScope);
-//     }
+  for (auto _ : state) {
+    for (int64_t i = 0; i < warmup_iters; i++) {
+      auto promise = immediatePromise().then([](size_t x) { return; });
+      promise.wait(waitScope);
+    }
 
-//     CALLGRIND_ZERO_STATS;
+    CALLGRIND_ZERO_STATS;
 
-//     auto promise = immediatePromise().then([](size_t x) { return; });
-//     promise.wait(waitScope);
-//   }
-// }
+    auto promise = immediatePromise().then([](size_t x) { return; });
+    promise.wait(waitScope);
+  }
+}
 
 // BENCHMARK(bm_Promise_ImmediatePromise_Then)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
-// static void bm_Coro_CoAwait_ImmediatePromise(benchmark::State &state) {
-//   // Benchmark coro that co_awaits an immediate coroutine
-//   kj::EventLoop loop;
-//   kj::WaitScope waitScope(loop);
+static void bm_Coro_CoAwait_ImmediatePromise(benchmark::State &state) {
+  // Benchmark coro that co_awaits an immediate coroutine
+  kj::EventLoop loop;
+  kj::WaitScope waitScope(loop);
 
-//   auto warmup_iters = state.range(0);
+  auto warmup_iters = state.range(0);
 
-//   for (auto _ : state) {
-//     for (int64_t i = 0; i < warmup_iters; i++) {
-//       auto promise = []() -> kj::Promise<void> { co_await immediatePromise(); }();
-//       promise.wait(waitScope);
-//     }
+  for (auto _ : state) {
+    for (int64_t i = 0; i < warmup_iters; i++) {
+      auto promise = []() -> kj::Promise<void> { co_await immediatePromise(); }();
+      promise.wait(waitScope);
+    }
 
-//     CALLGRIND_ZERO_STATS;
+    CALLGRIND_ZERO_STATS;
 
-//     auto promise = []() -> kj::Promise<void> { co_await immediatePromise(); }();
-//     promise.wait(waitScope);
-//   }
-// }
+    auto promise = []() -> kj::Promise<void> { co_await immediatePromise(); }();
+    promise.wait(waitScope);
+  }
+}
 
 // BENCHMARK(bm_Coro_CoAwait_ImmediatePromise)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
-// static void bm_Coro_CoAwait_ImmediateCoroutine(benchmark::State &state) {
-//   // Benchmark coro that co_awaits an immediate coroutine
-//   kj::EventLoop loop;
-//   kj::WaitScope waitScope(loop);
+static void bm_Coro_CoAwait_ImmediateCoroutine(benchmark::State &state) {
+  // Benchmark coro that co_awaits an immediate coroutine
+  kj::EventLoop loop;
+  kj::WaitScope waitScope(loop);
 
-//   auto warmup_iters = state.range(0);
+  auto warmup_iters = state.range(0);
 
-//   for (auto _ : state) {
-//     for (int64_t i = 0; i < warmup_iters; i++) {
-//       auto promise = []() -> kj::Promise<void> {
-//         co_await immediateCoroutine();
-//       }();
-//       promise.wait(waitScope);
-//     }
+  for (auto _ : state) {
+    for (int64_t i = 0; i < warmup_iters; i++) {
+      auto promise = []() -> kj::Promise<void> {
+        co_await immediateCoroutine();
+      }();
+      promise.wait(waitScope);
+    }
 
-//     CALLGRIND_ZERO_STATS;
+    CALLGRIND_ZERO_STATS;
 
-//     auto promise = []() -> kj::Promise<void> {
-//       co_await immediateCoroutine();
-//     }();
-//     promise.wait(waitScope);
-//   }
-// }
+    auto promise = []() -> kj::Promise<void> {
+      co_await immediateCoroutine();
+    }();
+    promise.wait(waitScope);
+  }
+}
 
 // BENCHMARK(bm_Coro_CoAwait_ImmediateCoroutine)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
-// ///////////////////////////////
-// // Pow benchmarks mean to benchmark promise evaluation when the start of the
-// // chain is immediate value.
+///////////////////////////////
+// Pow benchmarks mean to benchmark promise evaluation when the start of the
+// chain is immediate value.
 
-// // pow2(i) = 2^i by successive doubling of 1.
-// kj::Promise<size_t> pow2(size_t i) {
-//   if (i == 0)
-//     return 1;
-//   return pow2(i - 1).then([](size_t x) { return x << 1; });
-// }
+// pow2(i) = 2^i by successive doubling of 1.
+kj::Promise<size_t> pow2(size_t i) {
+  if (i == 0)
+    return 1;
+  return pow2(i - 1).then([](size_t x) { return x << 1; });
+}
 
-// static void bm_Promise_Pow2_20(benchmark::State &state) {
-//   // Benchmark waiting for an immediate promise.
-//   kj::EventLoop loop;
-//   kj::WaitScope waitScope(loop);
+static void bm_Promise_Pow2_20(benchmark::State &state) {
+  // Benchmark waiting for an immediate promise.
+  kj::EventLoop loop;
+  kj::WaitScope waitScope(loop);
 
-//   auto warmup_iters = state.range(0);
+  auto warmup_iters = state.range(0);
 
-//   for (auto _ : state) {
-//     for (int64_t i = 0; i < warmup_iters; i++) {
-//       auto promise = pow2(20);
-//       KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
-//     }
+  for (auto _ : state) {
+    for (int64_t i = 0; i < warmup_iters; i++) {
+      auto promise = pow2(20);
+      KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
+    }
 
-//     CALLGRIND_ZERO_STATS;
+    CALLGRIND_ZERO_STATS;
 
-//     auto promise = pow2(20);
-//     KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
-//   }
-// }
+    auto promise = pow2(20);
+    KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
+  }
+}
 
 // BENCHMARK(bm_Promise_Pow2_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
-// kj::Promise<size_t> coroPow2(size_t i) {
-//   if (i == 0)
-//     co_return 1;
-//   co_return (co_await coroPow2(i - 1)) << 1;
-// }
+kj::Promise<size_t> coroPow2(size_t i) {
+  if (i == 0)
+    co_return 1;
+  co_return (co_await coroPow2(i - 1)) << 1;
+}
 
-// static void bm_Coro_Pow2_20(benchmark::State &state) {
-//   // Benchmark waiting for an immediate promise.
-//   kj::EventLoop loop;
-//   kj::WaitScope waitScope(loop);
+static void bm_Coro_Pow2_20(benchmark::State &state) {
+  // Benchmark waiting for an immediate promise.
+  kj::EventLoop loop;
+  kj::WaitScope waitScope(loop);
 
-//   auto warmup_iters = state.range(0);
+  auto warmup_iters = state.range(0);
 
-//   for (auto _ : state) {
-//     for (int64_t i = 0; i < warmup_iters; i++) {
-//       auto promise = coroPow2(20);
-//       KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
-//     }
+  for (auto _ : state) {
+    for (int64_t i = 0; i < warmup_iters; i++) {
+      auto promise = coroPow2(20);
+      KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
+    }
 
-//     CALLGRIND_ZERO_STATS;
+    CALLGRIND_ZERO_STATS;
 
-//     auto promise = coroPow2(20);
-//     KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
-//   }
-// }
+    auto promise = coroPow2(20);
+    KJ_REQUIRE(promise.wait(waitScope) == 1ll << 20);
+  }
+}
 
 // BENCHMARK(bm_Coro_Pow2_20)->Arg(1)->Arg(5)->Arg(10)->Arg(20)->Arg(50)->Arg(100)->Arg(500)->Arg(1000);
 
