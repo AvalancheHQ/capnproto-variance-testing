@@ -118,7 +118,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        iteration: [1, 2] # , 3, 4, 5, 6, 7, 8, 9, 10]
+        iteration: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
     env:
       BAZEL_ARGS: --config=profile --@google_benchmark//:codspeed_mode=instrumentation
       CLANG: 20
@@ -132,8 +132,87 @@ jobs:
         run: |
           sudo apt-get install --update --no-upgrade --no-install-recommends -y clang-${{ env.CLANG }} libc++-${{ env.CLANG }}-dev libc++abi-${{ env.CLANG }}-dev libclang-rt-${{ env.CLANG }}-dev lld-${{ env.CLANG }}
 
-      - name: Setup tmate session
-        uses: mxschmitt/action-tmate@v3
+      - run: lscpu | grep "Model name"
+          
+      # - name: Setup tmate session
+      #   uses: mxschmitt/action-tmate@v3
+
+      - name: Collect libc and system information
+        run: |
+          mkdir -p libc-info
+
+          echo "=== Collecting system information ===" | tee libc-info/system-info.txt
+
+          # System details
+          echo "## System Information" | tee -a libc-info/system-info.txt
+          cat /etc/os-release | tee -a libc-info/system-info.txt
+          echo "" | tee -a libc-info/system-info.txt
+
+          echo "## Kernel" | tee -a libc-info/system-info.txt
+          uname -a | tee -a libc-info/system-info.txt
+          echo "" | tee -a libc-info/system-info.txt
+
+          echo "## CPU Model" | tee -a libc-info/system-info.txt
+          lscpu | grep "Model name" | tee -a libc-info/system-info.txt
+          lscpu | grep "Architecture" | tee -a libc-info/system-info.txt
+          lscpu | grep "CPU(s):" | tee -a libc-info/system-info.txt
+          lscpu | grep "Flags:" | tee -a libc-info/system-info.txt
+          echo "" | tee -a libc-info/system-info.txt
+
+          # GLIBC version
+          echo "## GLIBC Version" | tee -a libc-info/system-info.txt
+          ldd --version | tee -a libc-info/system-info.txt
+          echo "" | tee -a libc-info/system-info.txt
+
+          echo "## Installed libc packages" | tee -a libc-info/system-info.txt
+          dpkg -l | grep -E "libc6|libc-bin" | tee -a libc-info/system-info.txt
+          echo "" | tee -a libc-info/system-info.txt
+
+          # GLIBC files
+          echo "## GLIBC Files" | tee -a libc-info/system-info.txt
+          ls -lh /lib/x86_64-linux-gnu/libc* 2>/dev/null | tee -a libc-info/system-info.txt
+          ls -lh /lib/x86_64-linux-gnu/ld-* 2>/dev/null | tee -a libc-info/system-info.txt
+          echo "" | tee -a libc-info/system-info.txt
+
+          # GLIBC-HWCAPS
+          echo "## GLIBC-HWCAPS Support" | tee -a libc-info/system-info.txt
+          if [ -d /lib/x86_64-linux-gnu/glibc-hwcaps ]; then
+            echo "✓ glibc-hwcaps directory exists" | tee -a libc-info/system-info.txt
+            ls -la /lib/x86_64-linux-gnu/glibc-hwcaps/ | tee -a libc-info/system-info.txt
+            echo "" | tee -a libc-info/system-info.txt
+            echo "### Optimized libraries:" | tee -a libc-info/system-info.txt
+            find /lib/x86_64-linux-gnu/glibc-hwcaps -type f 2>/dev/null | tee -a libc-info/system-info.txt
+          else
+            echo "✗ No glibc-hwcaps directory found" | tee -a libc-info/system-info.txt
+          fi
+          echo "" | tee -a libc-info/system-info.txt
+
+          # All libc locations
+          echo "## All LIBC Locations" | tee -a libc-info/system-info.txt
+          find /lib* /usr/lib* -name "libc.so.6" -o -name "libc-2.*.so" 2>/dev/null | tee -a libc-info/system-info.txt
+
+      - name: Package libc files
+        run: |
+          cd /tmp
+          tar czf libc-files.tar.gz \
+            /lib/x86_64-linux-gnu/libc.so.6 \
+            /lib/x86_64-linux-gnu/libc-*.so \
+            /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 \
+            /lib/x86_64-linux-gnu/ld-*.so \
+            /lib/x86_64-linux-gnu/glibc-hwcaps \
+            2>/dev/null || true
+
+          mv libc-files.tar.gz ${{ github.workspace }}/libc-info/
+
+          # Show archive contents
+          echo "Archive contents:"
+          tar tzf ${{ github.workspace }}/libc-info/libc-files.tar.gz | head -20
+
+      - name: Upload libc information
+        uses: actions/upload-artifact@v4
+        with:
+          name: libc-info-iteration-${{ matrix.iteration }}
+          path: libc-info/
 
       # - name: Build benchmarks
       #   working-directory: c++
