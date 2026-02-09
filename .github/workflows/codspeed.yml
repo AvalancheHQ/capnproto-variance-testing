@@ -118,7 +118,7 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        iteration: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        iteration: [1, 2] # , 3, 4, 5, 6, 7, 8, 9, 10]
     env:
       BAZEL_ARGS: --config=profile --@google_benchmark//:codspeed_mode=instrumentation
       CLANG: 20
@@ -132,31 +132,34 @@ jobs:
         run: |
           sudo apt-get install --update --no-upgrade --no-install-recommends -y clang-${{ env.CLANG }} libc++-${{ env.CLANG }}-dev libc++abi-${{ env.CLANG }}-dev libclang-rt-${{ env.CLANG }}-dev lld-${{ env.CLANG }}
 
-      - name: Build benchmarks
-        working-directory: c++
-        run: |
-          bazel build ${{ env.BAZEL_ARGS }} --build_tag_filters=google_benchmark //...
+      - name: Setup tmate session
+        uses: mxschmitt/action-tmate@v3
 
-      - name: Generate benchmark script
-        working-directory: c++
-        run: |
-          echo '#!/bin/bash' > run_benchmarks.sh
-          echo 'set -ex' >> run_benchmarks.sh
-          echo 'cd c++' >> run_benchmarks.sh
-          targets=$(bazel query 'attr(tags, "[\[ ]google_benchmark[,\]]", //...)' --output=label 2>/dev/null)
-          for target in $targets; do
-            echo "bazel run ${{ env.BAZEL_ARGS }} $target -- --benchmark_min_time=1s" >> run_benchmarks.sh
-          done
-          chmod +x run_benchmarks.sh
+      # - name: Build benchmarks
+      #   working-directory: c++
+      #   run: |
+      #     bazel build ${{ env.BAZEL_ARGS }} --build_tag_filters=google_benchmark //...
 
-      - name: Run benchmarks (iteration ${{ matrix.iteration }})
-        uses: CodSpeedHQ/action@v4
-        with:
-          run: ./c++/run_benchmarks.sh
-          mode: simulation
+      # - name: Generate benchmark script
+      #   working-directory: c++
+      #   run: |
+      #     echo '#!/bin/bash' > run_benchmarks.sh
+      #     echo 'set -ex' >> run_benchmarks.sh
+      #     echo 'cd c++' >> run_benchmarks.sh
+      #     targets=$(bazel query 'attr(tags, "[\[ ]google_benchmark[,\]]", //...)' --output=label 2>/dev/null)
+      #     for target in $targets; do
+      #       echo "bazel run ${{ env.BAZEL_ARGS }} $target -- --benchmark_min_time=1s" >> run_benchmarks.sh
+      #     done
+      #     chmod +x run_benchmarks.sh
 
-      - name: Upload benchmark artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: benchmarks-parallel-${{ matrix.iteration }}
-          path: c++/bazel-bin/src/kj/
+      # - name: Run benchmarks (iteration ${{ matrix.iteration }})
+      #   uses: CodSpeedHQ/action@v4
+      #   with:
+      #     run: ./c++/run_benchmarks.sh
+      #     mode: simulation
+
+      # - name: Upload benchmark artifacts
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: benchmarks-parallel-${{ matrix.iteration }}
+      #     path: c++/bazel-bin/src/kj/
