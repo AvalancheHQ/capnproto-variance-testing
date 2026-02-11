@@ -118,7 +118,16 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        iteration: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        iteration: [ 1,  2,  3,  4,  5,  6,  7,  8,  9, 10, 
+                    11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+                    21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+                    31, 32, 33, 34, 35, 36, 37, 38, 39, 40,
+                    41, 42, 43, 44, 45, 46, 47, 48, 49, 50,
+                    51, 52, 53, 54, 55, 56, 57, 58, 59, 60,
+                    61, 62, 63, 64, 65, 66, 67, 68, 69, 70,
+                    71, 72, 73, 74, 75, 76, 77, 78, 79, 80,
+                    81, 82, 83, 84, 85, 86, 87, 88, 89, 90,
+                    91, 92, 93, 94, 95, 96, 97, 98, 99, 100 ]
     env:
       BAZEL_ARGS: --config=profile --@google_benchmark//:codspeed_mode=instrumentation
       CLANG: 20
@@ -137,108 +146,31 @@ jobs:
       # - name: Setup tmate session
       #   uses: mxschmitt/action-tmate@v3
 
-      - name: Collect libc and system information
+      - name: Build benchmarks
+        working-directory: c++
         run: |
-          mkdir -p libc-info
+          bazel build ${{ env.BAZEL_ARGS }} --build_tag_filters=google_benchmark //...
 
-          echo "=== Collecting system information ===" | tee libc-info/system-info.txt
-
-          # System details
-          echo "## System Information" | tee -a libc-info/system-info.txt
-          cat /etc/os-release | tee -a libc-info/system-info.txt
-          echo "" | tee -a libc-info/system-info.txt
-
-          echo "## Kernel" | tee -a libc-info/system-info.txt
-          uname -a | tee -a libc-info/system-info.txt
-          echo "" | tee -a libc-info/system-info.txt
-
-          echo "## CPU Model" | tee -a libc-info/system-info.txt
-          lscpu | grep "Model name" | tee -a libc-info/system-info.txt
-          lscpu | grep "Architecture" | tee -a libc-info/system-info.txt
-          lscpu | grep "CPU(s):" | tee -a libc-info/system-info.txt
-          lscpu | grep "Flags:" | tee -a libc-info/system-info.txt
-          echo "" | tee -a libc-info/system-info.txt
-
-          # GLIBC version
-          echo "## GLIBC Version" | tee -a libc-info/system-info.txt
-          ldd --version | tee -a libc-info/system-info.txt
-          echo "" | tee -a libc-info/system-info.txt
-
-          echo "## Installed libc packages" | tee -a libc-info/system-info.txt
-          dpkg -l | grep -E "libc6|libc-bin" | tee -a libc-info/system-info.txt
-          echo "" | tee -a libc-info/system-info.txt
-
-          # GLIBC files
-          echo "## GLIBC Files" | tee -a libc-info/system-info.txt
-          ls -lh /lib/x86_64-linux-gnu/libc* 2>/dev/null | tee -a libc-info/system-info.txt
-          ls -lh /lib/x86_64-linux-gnu/ld-* 2>/dev/null | tee -a libc-info/system-info.txt
-          echo "" | tee -a libc-info/system-info.txt
-
-          # GLIBC-HWCAPS
-          echo "## GLIBC-HWCAPS Support" | tee -a libc-info/system-info.txt
-          if [ -d /lib/x86_64-linux-gnu/glibc-hwcaps ]; then
-            echo "✓ glibc-hwcaps directory exists" | tee -a libc-info/system-info.txt
-            ls -la /lib/x86_64-linux-gnu/glibc-hwcaps/ | tee -a libc-info/system-info.txt
-            echo "" | tee -a libc-info/system-info.txt
-            echo "### Optimized libraries:" | tee -a libc-info/system-info.txt
-            find /lib/x86_64-linux-gnu/glibc-hwcaps -type f 2>/dev/null | tee -a libc-info/system-info.txt
-          else
-            echo "✗ No glibc-hwcaps directory found" | tee -a libc-info/system-info.txt
-          fi
-          echo "" | tee -a libc-info/system-info.txt
-
-          # All libc locations
-          echo "## All LIBC Locations" | tee -a libc-info/system-info.txt
-          find /lib* /usr/lib* -name "libc.so.6" -o -name "libc-2.*.so" 2>/dev/null | tee -a libc-info/system-info.txt
-
-      - name: Package libc files
+      - name: Generate benchmark script
+        working-directory: c++
         run: |
-          cd /tmp
-          tar czf libc-files.tar.gz \
-            /lib/x86_64-linux-gnu/libc.so.6 \
-            /lib/x86_64-linux-gnu/libc-*.so \
-            /lib/x86_64-linux-gnu/ld-linux-x86-64.so.2 \
-            /lib/x86_64-linux-gnu/ld-*.so \
-            /lib/x86_64-linux-gnu/glibc-hwcaps \
-            2>/dev/null || true
+          echo '#!/bin/bash' > run_benchmarks.sh
+          echo 'set -ex' >> run_benchmarks.sh
+          echo 'cd c++' >> run_benchmarks.sh
+          targets=$(bazel query 'attr(tags, "[\[ ]google_benchmark[,\]]", //...)' --output=label 2>/dev/null)
+          for target in $targets; do
+            echo "bazel run ${{ env.BAZEL_ARGS }} $target -- --benchmark_min_time=1s" >> run_benchmarks.sh
+          done
+          chmod +x run_benchmarks.sh
 
-          mv libc-files.tar.gz ${{ github.workspace }}/libc-info/
+      - name: Run benchmarks (iteration ${{ matrix.iteration }})
+        uses: CodSpeedHQ/action@v4
+        with:
+          run: ./c++/run_benchmarks.sh
+          mode: simulation
 
-          # Show archive contents
-          echo "Archive contents:"
-          tar tzf ${{ github.workspace }}/libc-info/libc-files.tar.gz | head -20
-
-      - name: Upload libc information
+      - name: Upload benchmark artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: libc-info-iteration-${{ matrix.iteration }}
-          path: libc-info/
-
-      # - name: Build benchmarks
-      #   working-directory: c++
-      #   run: |
-      #     bazel build ${{ env.BAZEL_ARGS }} --build_tag_filters=google_benchmark //...
-
-      # - name: Generate benchmark script
-      #   working-directory: c++
-      #   run: |
-      #     echo '#!/bin/bash' > run_benchmarks.sh
-      #     echo 'set -ex' >> run_benchmarks.sh
-      #     echo 'cd c++' >> run_benchmarks.sh
-      #     targets=$(bazel query 'attr(tags, "[\[ ]google_benchmark[,\]]", //...)' --output=label 2>/dev/null)
-      #     for target in $targets; do
-      #       echo "bazel run ${{ env.BAZEL_ARGS }} $target -- --benchmark_min_time=1s" >> run_benchmarks.sh
-      #     done
-      #     chmod +x run_benchmarks.sh
-
-      # - name: Run benchmarks (iteration ${{ matrix.iteration }})
-      #   uses: CodSpeedHQ/action@v4
-      #   with:
-      #     run: ./c++/run_benchmarks.sh
-      #     mode: simulation
-
-      # - name: Upload benchmark artifacts
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: benchmarks-parallel-${{ matrix.iteration }}
-      #     path: c++/bazel-bin/src/kj/
+          name: benchmarks-parallel-${{ matrix.iteration }}
+          path: c++/bazel-bin/src/kj/
